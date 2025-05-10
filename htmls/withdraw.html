@@ -425,66 +425,6 @@
       text-decoration: underline;
     }
 
-    .popup {  
-      display: none;  
-      position: fixed;  
-      top: 0;  
-      left: 0;  
-      width: 100%;  
-      height: 100%;  
-      background-color: rgba(0, 0, 0, 0.966);  
-      z-index: 1000; 
-      text-align: center; 
-    }  
-
-    .popup-content { 
-      display: none; 
-      background-color: #fff;  
-      margin: 15% auto;  
-      padding: 20px;  
-      width: 70%;  
-      max-width: 400px;  
-      position: relative;  
-      border-radius: 10px;  
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.062);
-      font-size: 20px;  
-    }
-
-    .popup-content h2 {
-      margin-bottom: 15px;
-    }
-
-    .popup-content p {
-      margin-bottom: 15px;
-    }
-
-    .popup-content1 {  
-      background-color: #fff;  
-      margin: 15% auto;  
-      padding: 20px;  
-      width: 70%;  
-      max-width: 400px;  
-      position: relative;  
-      border-radius: 10px;  
-      box-shadow: 0 8px 16px rgba(0,0,0,0.062);
-      font-size: 20px;  
-    }
-
-    .popup-content button {
-      background-color: red;
-      color: white;
-      padding: 20px 30px;
-      margin-top: 5px;
-      border: none;
-      border-radius: 8px;
-      font-size: 18px;
-      cursor: pointer;
-    }
-
-    .popup-content button:hover {
-      background-color: darkred;
-    }
-
     img {
       width: 50px;
     }
@@ -585,19 +525,6 @@
       </div>
     </main>
 
-    <div id="popup" class="popup">
-      <div class="popup-content1">
-        <h2>Please Wait</h2>
-        <img src="../multimedia/images/loading.BtH7NlLy.png" alt="Loading">
-      </div>
-      <div class="popup-content">
-        <h2>Message</h2>
-        <img src="../multimedia/images/download.png" alt="Message">
-        <p>Authorization needed to complete this transaction.</p>
-        <button id="closePopupBtn">Contact Account Manager to proceed</button>
-      </div>
-    </div>
-
     <!-- Footer -->
     <footer class="footer">
       <div class="container flex flex-col md:flex-row justify-between items-center text-sm text-gray-600">
@@ -611,6 +538,8 @@
     </footer>
   </div>
 
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script type="module">
     // Firebase imports
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
@@ -645,6 +574,11 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const storage = getStorage(app);
+
+    // Initialize EmailJS with your User ID
+    (function() {
+      emailjs.init('QTgSy_N-GYHSxMJNs'); // Replace with your actual EmailJS user ID
+    })();
 
     // Get user ID from URL
     const searchParams = new URLSearchParams(window.location.search);
@@ -687,12 +621,42 @@
       }
     }
 
-    // Open popup function
-    function openPopup() {
+    // Function to send withdrawal confirmation email
+    async function sendWithdrawalEmail(userEmail, userName, bankName, accountNum, amount) {
+      try {
+        const templateParams = {
+          to_email: userEmail,
+          user_name: userName,
+          bank_name: bankName,
+          account_number: accountNum,
+          amount: parseFloat(amount).toFixed(2),
+          date: new Date().toLocaleDateString(),
+          time: new Date().toLocaleTimeString(),
+          transaction_id: `WDR-${Date.now()}`,
+          support_email: 'support@savingsplus.com'
+        };
+
+        const response = await emailjs.send(
+          'service_2yt4crg', // Replace with your EmailJS service ID
+          'template_pclzbya', // Replace with your EmailJS template ID
+          templateParams
+        );
+
+        console.log('Email sent successfully:', response);
+        return true;
+      } catch (error) {
+        console.error('Failed to send email:', error);
+        return false;
+      }
+    }
+
+    // Process withdrawal with SweetAlert
+    async function processWithdrawal() {
       // Get form values
       const bankName = document.getElementById('bankName').value.trim();
       const accountNum = document.getElementById('accountNum').value.trim();
       const amount = document.getElementById('amount').value.trim();
+      const note = document.getElementById('note').value.trim();
       
       // Validate form
       let isValid = true;
@@ -720,27 +684,58 @@
       document.getElementById('transferBtn').style.display = 'none';
       document.getElementById('loadingBtn').style.display = 'flex';
       
-      // Show popup
-      document.getElementById("popup").style.display = "block";
-      const loadingPopup = document.querySelector('.popup-content1');  
-      const errorPopup = document.querySelector('.popup-content');  
-      
-      // Show loading popup first
-      loadingPopup.style.display = 'block';
-      errorPopup.style.display = 'none';
-      
-      // After 3 seconds, hide loading and show message
-      setTimeout(function() {  
-        loadingPopup.style.display = 'none';  
-        errorPopup.style.display = 'block';  
-      }, 3000);
-    }
-
-    // Close popup function
-    function closePopup() {
-      document.getElementById("popup").style.display = "none";
-      document.getElementById('transferBtn').style.display = 'flex';
-      document.getElementById('loadingBtn').style.display = 'none';
+      try {
+        // Get user data to send email
+        const userDocRef = doc(db, "bankUsers", userId);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          const userEmail = userData.email;
+          const userName = userData.name || "Valued Customer";
+          
+          // Send withdrawal confirmation email
+          const emailSent = await sendWithdrawalEmail(
+            userEmail, 
+            userName, 
+            bankName, 
+            accountNum, 
+            amount
+          );
+          
+          if (!emailSent) {
+            console.warn("Withdrawal processed but email failed to send");
+          }
+        }
+        
+        // Show success message with SweetAlert
+          Swal.fire({
+          title: 'Withdrawal Successful!',
+          text: `Your withdrawal of $${amount} has been processed.`,
+          icon: 'success',
+          confirmButtonText: 'OK',
+          confirmButtonColor: '#4f46e5'
+        }).then(() => {
+          // Reset form and buttons
+          document.getElementById('transferForm').reset();
+          document.getElementById('transferBtn').style.display = 'flex';
+          document.getElementById('loadingBtn').style.display = 'none';
+        });
+        
+      } catch (error) {
+        console.error("Error processing withdrawal:", error);
+        // Show error message with SweetAlert
+        Swal.fire({
+          title: 'Error',
+          text: 'An error occurred while processing your withdrawal. Please try again.',
+          icon: 'error',
+          confirmButtonText: 'OK',
+          confirmButtonColor: '#4f46e5'
+        });
+        // Reset buttons
+        document.getElementById('transferBtn').style.display = 'flex';
+        document.getElementById('loadingBtn').style.display = 'none';
+      }
     }
 
     // Load user data
@@ -804,17 +799,7 @@
       document.getElementById('dropdownSignOut').addEventListener('click', handleSignOut);
       
       // Transfer button
-      document.getElementById('transferBtn').addEventListener('click', openPopup);
-      
-      // Close popup button
-      document.getElementById('closePopupBtn').addEventListener('click', closePopup);
-      
-      // Close popup when clicking outside
-      window.addEventListener('click', (event) => {
-        if (event.target === document.getElementById('popup')) {
-          closePopup();
-        }
-      });
+      document.getElementById('transferBtn').addEventListener('click', processWithdrawal);
       
       // Clear errors when typing
       document.getElementById('bankName').addEventListener('input', () => clearError('bankName'));
@@ -835,6 +820,6 @@
         window.location.href = './login.html';
       }
     });
-  </script>
+</script>
 </body>
 </html>
