@@ -507,7 +507,7 @@
       <div class="container flex gap-6">
         <a id="dash" href="#" class="tab active">Dashboard</a>
         <a href="#" id="transferPage" class="tab">Transfers</a>
-        <a href="#" class="tab">Payments</a>
+        <a href="#" id="withdrawPage" class="tab">Withdraw</a>
         <a href="#" class="tab">Accounts</a>
       </div>
     </nav>
@@ -763,6 +763,12 @@
       document.getElementById('transferPage').addEventListener('click', (e) => {
         e.preventDefault();
         window.location.href = `./transfer.html?id=${userId}`;
+      });
+
+      // Set up withdraw page navigation
+      document.getElementById('withdrawPage').addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.href = `./withdraw.html?id=${userId}`;
       });
       
       document.getElementById('transferPageBtn').addEventListener('click', (e) => {
