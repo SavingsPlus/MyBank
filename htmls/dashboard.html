@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="shortcut icon" href="../multimedia/images/TIMZ_C.png" type="image/x-icon">
+  <!-- EmailJS Script -->
+  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3.2.0/dist/email.min.js"></script>
   <style>
     :root {
       --primary: #2563eb;
@@ -448,7 +450,6 @@
         flex-direction: row;
       }
       
-      
       .md\:w-1\/2 {
         width: 50%;
       }
@@ -576,6 +577,11 @@
 
   <!-- Firebase Scripts -->
   <script type="module">
+    // Initialize EmailJS
+    (function() {
+      emailjs.init("YOUR_EMAILJS_USER_ID"); // Replace with your EmailJS user ID
+    })();
+
     // Firebase config
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
     import { 
@@ -630,6 +636,32 @@
         minimumFractionDigits: 2
       }).format(amount);
     }
+
+    // Function to send transaction email
+    async function sendTransactionEmail(userData, transaction) {
+      try {
+        const templateParams = {
+          to_name: userData.name,
+          to_email: userData.email,
+          transaction_amount: formatCurrency(transaction.amount),
+          transaction_description: transaction.description,
+          transaction_date: new Date(transaction.timestamp?.seconds * 1000).toLocaleDateString(),
+          account_balance: formatCurrency(userData.accountBalance || 0),
+          account_number: userData.accountNumber || '•••• •••• ••••'
+        };
+
+        // Send email using EmailJS
+        await emailjs.send(
+          'YOUR_EMAILJS_SERVICE_ID', // Replace with your EmailJS service ID
+          'YOUR_EMAILJS_TEMPLATE_ID', // Replace with your EmailJS template ID
+          templateParams
+        );
+        
+        console.log('Transaction notification email sent successfully');
+      } catch (error) {
+        console.error('Failed to send transaction email:', error);
+      }
+    }
   
     // Load transactions for the logged-in user
     function loadTransactions(userId) {
@@ -641,13 +673,18 @@
         const q = query(transactionsRef, orderBy("timestamp", "desc"), limit(5));
         
         // Real-time listener
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const unsubscribe = onSnapshot(q, async (querySnapshot) => {
           transactionsList.innerHTML = "";
           
           if (querySnapshot.empty) {
             transactionsList.innerHTML = '<li class="py-4 text-center text-gray-500">No transactions found.</li>';
             return;
           }
+          
+          // Get user data for email
+          const userDocRef = doc(userColRef, userId);
+          const userDoc = await getDoc(userDocRef);
+          const userData = userDoc.data();
           
           querySnapshot.forEach(doc => {
             const txn = doc.data();
@@ -669,6 +706,11 @@
               </p>
             `;
             transactionsList.appendChild(li);
+
+            // Send email notification for credit transactions
+            if (txn.type === 'credit' && userData.email) {
+              sendTransactionEmail(userData, txn);
+            }
           });
         }, (error) => {
           console.error("Error loading transactions:", error);
